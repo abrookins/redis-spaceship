@@ -18,9 +18,28 @@ class Direction(Enum):
     NW = 8
 
 
-class Propulsion(Protocol):
-    def fire(self, units: int, direction: Direction):
+class PropulsionSystem(Protocol):
+    """A propulsion system.
+
+    A propulsion system may be on, at which time it begins burning fuel at
+    its currently configured burn rate. This is the amount of fuel it burns
+    per second.
+
+    The maximum burn rate is constant.
+
+    The minimum burn rate is zero.
+
+    Propulsion systems have a direction they are currently pointing. Some
+    might be fixed, while others can change direction.
+
+    You fire a thurster to turn it on, and it burns at the currently set burn
+    rate, producing force.
+    """
+    def activate(self, units: int, direction: Direction):
         """Burn the specified number of fuel units pointed in the given direction."""
+
+    def cut(self):
+        """Stop burning fuel."""
 
 
 class WeightedObject(Protocol):
@@ -45,8 +64,8 @@ class Deck(Protocol):
 
 class Ship:
     def __init__(self,
-                 forward_thruster: Propulsion,
-                 aft_thruster: Propulsion,
+                 forward_thruster: PropulsionSystem,
+                 aft_thruster: PropulsionSystem,
                  decks: List[Deck]) -> None:
         self.forward_thruster = forward_thruster
         self.aft_thruster = aft_thruster
@@ -61,7 +80,7 @@ class Ship:
             self.forward_thruster.fire(fuel_units, direction)
 
 
-class PipelineIonThruster(Propulsion):
+class PipelineIonThruster(PropulsionSystem):
     MAX_FUEL_BURN_PER_CYCLE = 5
 
     def __init__(self, redis_client: Redis, ship: Ship):
