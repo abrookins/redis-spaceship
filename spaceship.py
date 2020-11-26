@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol, List
 from redis import Redis
@@ -6,7 +7,15 @@ from . import keys
 r = Redis()
 
 
+# Math Shit
+#
+# weight = mass * gravity (9.8 on earth)
+# resultant force = thrust – weight
+# acceleration = resultant force (newtons, N) divided by mass (kilograms, kg).
+
+
 class Direction(Enum):
+    """Directions in space are still tracked using cardinal directions."""
     N = 1
     NE = 2
     E = 3
@@ -18,8 +27,16 @@ class Direction(Enum):
     NW = 8
 
 
+@dataclass
+class Velocity:
+    speed_kmh: float
+    direction: Direction = None
+
+
 class PropulsionSystem(Protocol):
     """A propulsion system.
+
+    TODO: Update language here.
 
     A propulsion system may be on, at which time it begins burning fuel at
     its currently configured burn rate. This is the amount of fuel it burns
@@ -64,15 +81,24 @@ class Deck(Protocol):
 
 class Ship:
     def __init__(self,
+                 mass_kg: float,
+                 current_gravity: float,
                  forward_thruster: PropulsionSystem,
                  aft_thruster: PropulsionSystem,
                  decks: List[Deck]) -> None:
+        self.mass_kg = mass_kg
         self.forward_thruster = forward_thruster
         self.aft_thruster = aft_thruster
         self.decks = {deck.name: deck for deck in decks}
+        self.current_velocity = Velocity(0, Direction.N)
 
-    def accelerate(self, direction: Direction, desired_speed_mh: float):
+    @property
+    def weight(self):
+        return self.mass_kg * self.current_gravity
+
+    def accelerate(self, target_velocity: Velocity):
         fuel_units = 10  # TODO: how many units to burn for desired speed?
+        direction = target_velocity.direction
 
         if direction in (Direction.N, Direction.NE, Direction.NW):
             self.aft_thruster.fire(fuel_units, direction)
@@ -81,7 +107,11 @@ class Ship:
 
 
 class PipelineIonThruster(PropulsionSystem):
+    # TODO: Specific impulse? Need thrust per fuel unit?
+    # Can we calculate with Thrust-specific fuel consumption?
+    # Get examples of these from the space shuttle launches.
     MAX_FUEL_BURN_PER_CYCLE = 5
+    THRUST_PER_SECOND_NEWTONS = 5e7  # 50 million newtons!
 
     def __init__(self, redis_client: Redis, ship: Ship):
         self.redis = redis_client
