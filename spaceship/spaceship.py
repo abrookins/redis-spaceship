@@ -154,6 +154,9 @@ class ListEventLog(EventLog):
     def __init__(self):
         self.events = []
 
+    def __len__(self):
+        return len(self.events)
+
     def events(self, start: int, end: int) -> List[Event]:
         start_idx = bisect.bisect_left(self.events, Event(timestamp=start, description="")) + 1
         end_idx = bisect.bisect_right(self.events, Event(timestamp=end, description=""))

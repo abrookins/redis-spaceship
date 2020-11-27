@@ -17,4 +17,7 @@ def ship():
 
 def test_accelerate(ship: Ship):
     ship.accelerate(Velocity(500, Direction.N))
-    assert ship.event_log.events == []
+    assert len(ship.event_log) == 5
+
+    for event in ship.event_log.events:
+        assert event.description == 'fuel burned: 2'
