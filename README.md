@@ -8,7 +8,7 @@ Redis Lords_ from [Spellbook Press](https://spellbookpress.com).
 
 ## Synopsis
 
-You, along with small crew of scientists, were traveling through hyperspace
+You, along with a small crew of scientists, were traveling through hyperspace
 on a mission of discovery when your RelationalDrive failed, knocking your
 ship _Emissary_ off trajectory.
 
