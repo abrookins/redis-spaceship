@@ -1,6 +1,8 @@
 from enum import Enum
 from dataclasses import dataclass
 
+from marshmallow_dataclass import class_schema
+
 
 class Direction(Enum):
     """Directions in space are tracked using cardinal directions."""
@@ -18,3 +20,7 @@ class Direction(Enum):
 class Velocity:
     speed_kmh: float
     direction: Direction
+
+
+velocity_schema = class_schema(Velocity)()
+direction_schema = class_schema(Direction)()

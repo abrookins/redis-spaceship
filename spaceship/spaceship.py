@@ -1,14 +1,13 @@
 import bisect
 import math
-from math import remainder
 import time
 from collections import defaultdict
 from typing import Any, Dict, Protocol, List, Union
 from dataclasses import dataclass
 
 from redis import Redis
-from .keys import pipeline_thruster_thrust_key
-from .models import Direction, Velocity
+from . import keys
+from .models import Direction, Velocity, direction_schema, velocity_schema
 
 r = Redis()
 
@@ -85,25 +84,60 @@ class Deck(Protocol):
         """Store an object in this deck."""
 
 
-class Ship:
+class DictShip:
     def __init__(self,
                  data: Dict[Any, Any],
                  event_log: EventLog,
+                 base_mass_kg: float,
                  forward_thruster: PropulsionSystem,
                  aft_thruster: PropulsionSystem,
                  decks: List[Deck]) -> None:
+        self.base_mass_kg = base_mass_kg
         self.forward_thruster = forward_thruster
         self.aft_thruster = aft_thruster
         self.decks = {deck.name: deck for deck in decks}
         self.event_log = event_log
 
-        # TODO: abstract this; supports dicts and redis
+        # TODO: abstract this; supports dicts and redis?
+        # boot_brain() method...?
         data['current_velocity'] = Velocity(0, Direction.N)
         data['acceleration'] = defaultdict(float)
         self.data = data
 
     @property
     def weight(self):
+        return self.data['current_mass_kg'] * self.data['current_gravity']
+
+    def accelerate(self, target_velocity: Velocity):
+        if target_velocity.direction in (Direction.N, Direction.NE, Direction.NW):
+            for fuel_burned in self.aft_thruster.fire(target_velocity):
+                self.event_log.add(Event(time.time(), {'fuel_burned': fuel_burned}))
+            return
+
+        for fuel_burned in self.forward_thruster.fire(target_velocity):
+            self.event_log.add(Event(time.time(), {'fuel_burned': fuel_burned}))
+
+class RedisShip:
+    def __init__(self,
+                 data: Dict[Any, Any],
+                 event_log: EventLog,
+                 base_mass_kg: float,
+                 forward_thruster: PropulsionSystem,
+                 aft_thruster: PropulsionSystem,
+                 decks: List[Deck]) -> None:
+        self.base_mass_kg = base_mass_kg
+        self.forward_thruster = forward_thruster
+        self.aft_thruster = aft_thruster
+        self.decks = {deck.name: deck for deck in decks}
+        self.event_log = event_log
+
+        # TODO: abstract this; supports dicts and redis?
+        data['current_velocity'] = velocity_schema.dumps(Velocity(0, Direction.N))
+        self.data = data
+
+    @property
+    def weight(self):
+        # TODO: Pipeline
         return self.data['current_mass_kg'] * self.data['current_gravity']
 
     def accelerate(self, target_velocity: Velocity):
@@ -150,12 +184,45 @@ class DictThruster(PropulsionSystem):
     def fire(self, target_velocity: Velocity):
         remainder, seconds_to_burn = math.modf(
             target_velocity.speed_kmh / self.acceleration_per_second_kmh)
+
+        direction = target_velocity.direction.value
+
         for _ in range(int(seconds_to_burn)):
-            self.data['speed_kmh'][target_velocity.direction] += self.acceleration_per_second_kmh
+            self.data['speed_kmh'][direction] += self.acceleration_per_second_kmh
             yield self.FUEL_BURNED_PER_SECOND
 
         if remainder:
-            self.data['speed_kmh'][target_velocity.direction] += self.acceleration_per_second_kmh * remainder
+            self.data['speed_kmh'][direction] += self.acceleration_per_second_kmh * remainder
+            yield self.FUEL_BURNED_PER_SECOND * remainder
+
+
+class RedisThruster(PropulsionSystem):
+    THRUST_PER_SECOND_NEWTONS = 5e7  # 50 million newtons
+    FUEL_BURNED_PER_SECOND = 2  # Number of fuel units burned per second
+
+    def __init__(self, name: str, data: Redis):
+        self.name = name
+        self.data = data
+        ship_mass_kg = float(data.get(keys.ship_current_mass_kg()))
+        resultant_force = self.THRUST_PER_SECOND_NEWTONS - ship_mass_kg
+        self.acceleration_per_second_kmh = (resultant_force / ship_mass_kg) * 3.6
+
+    def fire(self, target_velocity: Velocity):
+        remainder, seconds_to_burn = math.modf(
+            target_velocity.speed_kmh / self.acceleration_per_second_kmh)
+
+        key = keys.ship_current_speed(target_velocity.direction)
+
+        with self.data.pipeline(transaction=False) as p:
+            # TODO: Coroutine -- yield from caller; caller decides
+            # whether to continue the burn after examining fuel burned.
+            for _ in range(int(seconds_to_burn)):
+                self.data.incrbyfloat(key, self.acceleration_per_second_kmh)
+                yield self.FUEL_BURNED_PER_SECOND
+            p.execute()
+
+        if remainder:
+            self.data.incrbyfloat(key, self.acceleration_per_second_kmh * remainder)
             yield self.FUEL_BURNED_PER_SECOND * remainder
 
 
@@ -175,18 +242,3 @@ class ListEventLog(EventLog):
         bisect.insort(self.events, event)
 
 
-class PipelineThruster(PropulsionSystem):
-    # TODO: Specific impulse? Need thrust per fuel unit?
-    # Can we calculate with Thrust-specific fuel consumption?
-    # Get examples of these from the space shuttle launches.
-    THRUST_PER_SECOND_NEWTONS = 5e7  # 50 million newtons!
-    FUEL_BURNED_PER_SECOND = 2  # Number of fuel units burned per second
-
-    def __init__(self, redis_client: Redis, ship: Ship):
-        self.redis = redis_client
-
-    def fire(self, fuel_units: int, direction: Direction):
-        key = pipeline_thruster_thrust_key(direction)
-        with self.redis.pipeline(transaction=False):
-            for _ in fuel_units:
-                self.redis.decr(key)
