@@ -23,8 +23,8 @@ def redis():
 def dict_ship():
     data = {
         'speed_kmh': defaultdict(float),
-        'base_mass_kg': 2e6,  # 2 million kilograms
-        'current_mass_kg': 2e6,
+        'base_mass_kg': TWO_MILLION_KG,
+        'current_mass_kg': TWO_MILLION_KG,
         'current_gravity': EARTH_GRAVITY,
     }
     return DictShip(data,

@@ -2,4 +2,6 @@ redis==3.5.3
 marshmallow-dataclass
 marshmallow-enum
 
+pylint
+yapf
 pytest

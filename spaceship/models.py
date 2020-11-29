@@ -1,5 +1,6 @@
 from enum import Enum
 from dataclasses import dataclass
+from typing import Dict, Any
 
 from marshmallow_dataclass import class_schema
 
@@ -20,6 +21,12 @@ class Direction(Enum):
 class Velocity:
     speed_kmh: float
     direction: Direction
+
+
+@dataclass(order=True)
+class Event:
+    timestamp: int
+    data: Dict[str, Any]
 
 
 velocity_schema = class_schema(Velocity)()
