@@ -1,7 +1,9 @@
 import bisect
+import math
+from math import remainder
 import time
 from collections import defaultdict
-from typing import Protocol, List, Union
+from typing import Any, Dict, Protocol, List, Union
 from dataclasses import dataclass
 
 from redis import Redis
@@ -25,7 +27,7 @@ class NoCapacityError(Exception):
 @dataclass(order=True)
 class Event:
     timestamp: int
-    description: str
+    data: Dict[str, Any]
 
 
 class EventLog(Protocol):
@@ -55,8 +57,8 @@ class PropulsionSystem(Protocol):
     You fire a thurster to turn it on, and it burns at the currently set burn
     rate, producing force.
     """
-    def fire(self, units: int, direction: Direction):
-        """Burn the specified number of fuel units pointed in the given direction."""
+    def fire(self, direction: Direction):
+        """Burn fuel in the given direction."""
 
 
 class WeightedObject(Protocol):
@@ -85,35 +87,33 @@ class Deck(Protocol):
 
 class Ship:
     def __init__(self,
-                 mass_kg: float,
-                 current_gravity: float,
+                 data: Dict[Any, Any],
+                 event_log: EventLog,
                  forward_thruster: PropulsionSystem,
                  aft_thruster: PropulsionSystem,
-                 decks: List[Deck],
-                 event_log: EventLog) -> None:
-        self.mass_kg = mass_kg
+                 decks: List[Deck]) -> None:
         self.forward_thruster = forward_thruster
         self.aft_thruster = aft_thruster
         self.decks = {deck.name: deck for deck in decks}
-        self.current_velocity = Velocity(0, Direction.N)
-        self.current_gravity = current_gravity
         self.event_log = event_log
+
+        # TODO: abstract this; supports dicts and redis
+        data['current_velocity'] = Velocity(0, Direction.N)
+        data['acceleration'] = defaultdict(float)
+        self.data = data
 
     @property
     def weight(self):
-        return self.mass_kg * self.current_gravity
+        return self.data['current_mass_kg'] * self.data['current_gravity']
 
     def accelerate(self, target_velocity: Velocity):
-        fuel_units = 10  # TODO: how many units to burn for desired speed?
-        direction = target_velocity.direction
-
-        if direction in (Direction.N, Direction.NE, Direction.NW):
-            for fuel_burned in self.aft_thruster.fire(fuel_units, direction):
-                self.event_log.add(Event(time.time(), f'fuel burned: {fuel_burned}'))
+        if target_velocity.direction in (Direction.N, Direction.NE, Direction.NW):
+            for fuel_burned in self.aft_thruster.fire(target_velocity):
+                self.event_log.add(Event(time.time(), {'fuel_burned': fuel_burned}))
             return
 
-        for fuel_burned in self.forward_thruster.fire(fuel_units, direction):
-            self.event_log.add(Event(time.time(), f'fuel burned: {fuel_burned}'))
+        for fuel_burned in self.forward_thruster.fire(target_velocity):
+            self.event_log.add(Event(time.time(), {'fuel_burned': fuel_burned}))
 
 
 class DictDeck(Deck):
@@ -137,17 +137,26 @@ class DictDeck(Deck):
 
 
 class DictThruster(PropulsionSystem):
-    THRUST_PER_SECOND_NEWTONS = 5e7  # 50 million newtons!
+    THRUST_PER_SECOND_NEWTONS = 5e7  # 50 million newtons
     FUEL_BURNED_PER_SECOND = 2  # Number of fuel units burned per second
 
-    def __init__(self):
-        self.thrust = defaultdict(int)
+    def __init__(self, name: str, data: Dict[Any, Any]):
+        self.name = name
+        self.data = data
+        ship_mass_kg = data['current_mass_kg']
+        resultant_force = self.THRUST_PER_SECOND_NEWTONS - ship_mass_kg
+        self.acceleration_per_second_kmh = (resultant_force / ship_mass_kg) * 3.6
 
-    def fire(self, fuel_units: int, direction: Direction):
-        seconds_to_burn = fuel_units / self.FUEL_BURNED_PER_SECOND
-        for _ in range(int(seconds_to_burn)):  # round down
-            self.thrust[direction] += self.THRUST_PER_SECOND_NEWTONS
+    def fire(self, target_velocity: Velocity):
+        remainder, seconds_to_burn = math.modf(
+            target_velocity.speed_kmh / self.acceleration_per_second_kmh)
+        for _ in range(int(seconds_to_burn)):
+            self.data['speed_kmh'][target_velocity.direction] += self.acceleration_per_second_kmh
             yield self.FUEL_BURNED_PER_SECOND
+
+        if remainder:
+            self.data['speed_kmh'][target_velocity.direction] += self.acceleration_per_second_kmh * remainder
+            yield self.FUEL_BURNED_PER_SECOND * remainder
 
 
 class ListEventLog(EventLog):
