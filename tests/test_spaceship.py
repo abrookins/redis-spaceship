@@ -5,7 +5,9 @@ from pytest import fixture
 from redis import Redis
 
 from spaceship.models import Direction, Velocity
-from spaceship.spaceship import DictShip, RedisShip, DictDeck, DictThruster, ListEventLog, RedisThruster, NoCapacityError
+from spaceship.spaceship import NoCapacityError
+from spaceship.python import DictShip, DictDeck, DictThruster, ListEventLog
+from spaceship.redis import RedisShip, RedisThruster
 
 EARTH_GRAVITY = 9.8
 TWO_MILLION_KG = 2e6
