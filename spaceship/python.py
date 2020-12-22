@@ -4,8 +4,7 @@ from collections import defaultdict
 from typing import Any, Dict, List, Union
 
 from .models import Direction, Event, Velocity
-from .protocols import (Deck, EventLog, NamedObject, PropulsionSystem,
-                        WeightedObject)
+from .protocols import (Deck, EventLog, PropulsionSystem, ShipObject)
 from .spaceship import NoCapacityError, ShipBase
 
 
@@ -36,15 +35,14 @@ class DictDeck(Deck):
         self.data = data['decks'][name] = {'objects': {}}
         self.storage = self.data['objects']
 
-    @property
     def stored_mass_kg(self):
-        return sum([obj.weight_kg for obj in self.data['objects'].values()])
+        return sum([obj.mass_kg for obj in self.data['objects'].values()])
 
     def capacity(self) -> float:
         """The current capacity of this deck."""
-        return self.max_storage_kg - self.stored_mass_kg
+        return self.max_storage_kg - self.stored_mass_kg()
 
-    def store(self, object: Union[WeightedObject, NamedObject]):
+    def store(self, object: ShipObject):
         """Store an object in this deck."""
         if not self.capacity:
             raise NoCapacityError
@@ -74,9 +72,6 @@ class DictThruster(PropulsionSystem):
         if remainder:
             self.data['speed_kmh'][direction] += acceleration_per_second_kmh * remainder
             yield self.FUEL_BURNED_PER_SECOND * remainder
-
-
-
 
 
 class DictShip(ShipBase):

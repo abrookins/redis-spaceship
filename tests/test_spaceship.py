@@ -4,10 +4,10 @@ from spaceship import keys
 from pytest import fixture
 from redis import Redis
 
-from spaceship.models import Direction, Velocity
+from spaceship.models import Direction, Person, Velocity
 from spaceship.spaceship import NoCapacityError
 from spaceship.python import DictShip, DictDeck, DictThruster, ListEventLog
-from spaceship.redis import RedisShip, RedisThruster
+from spaceship.redis import HashDeck, RedisShip, PipelineThruster
 
 EARTH_GRAVITY = 9.8
 TWO_MILLION_KG = 2e6
@@ -16,7 +16,7 @@ TWO_MILLION_KG = 2e6
 @fixture
 def redis():
     # TODO: Port, etc.
-    r = Redis()
+    r = Redis(decode_responses=True)
     yield r
     r.flushdb()
 
@@ -45,8 +45,8 @@ def redis_ship(redis):
     return RedisShip(redis,
                      base_mass_kg=TWO_MILLION_KG,
                      event_log=ListEventLog(),
-                     decks=[DictDeck('main', {}, 1000)],
-                     thruster=RedisThruster(redis))
+                     decks=[HashDeck('main', redis, 1000)],
+                     thruster=PipelineThruster(redis))
 
 
 def test_accelerate_dict_ship(dict_ship: DictShip):
@@ -72,20 +72,23 @@ def test_accelerate_redis_ship(redis_ship: RedisShip):
         'fuel_burned': 0.27485380116959135
     }
 
-    current_speed = float(redis_ship.data[keys.ship_current_speed(Direction.N.value)])
+    current_speed = float(redis_ship.redis.get(keys.ship_current_speed(Direction.N.value)))
     assert round(current_speed) == 500.0
 
 
 def test_load_dict_deck(dict_ship: DictShip):
-    @dataclass
-    class Animal:
-        name: str
-        weight_kg:float
-
-    mouse = Animal(name="mouse", weight_kg=0.25)
+    bob = Person(name="Bob", mass_kg=86)
 
     assert dict_ship.weight_kg == TWO_MILLION_KG * EARTH_GRAVITY
+    dict_ship.store('main', bob)
+    assert dict_ship.weight_kg == (TWO_MILLION_KG + 86) * EARTH_GRAVITY
 
-    dict_ship.store('main', mouse)
 
-    assert dict_ship.weight_kg == (TWO_MILLION_KG + 0.25) * EARTH_GRAVITY
+def test_redis_deck_store(redis_ship: RedisShip):
+    bob = Person(name="Bob", mass_kg=86)
+
+    assert redis_ship.weight_kg == TWO_MILLION_KG * EARTH_GRAVITY
+    redis_ship.store('main', bob)
+    assert redis_ship.weight_kg == (TWO_MILLION_KG + 86) * EARTH_GRAVITY
+
+    assert redis_ship.decks['main'].get("Bob") == bob

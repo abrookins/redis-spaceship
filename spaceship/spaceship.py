@@ -2,7 +2,7 @@ import time
 from typing import List
 
 from .models import Velocity, Event
-from .protocols import EventLog, PropulsionSystem, WeightedObject, Deck
+from .protocols import EventLog, PropulsionSystem, ShipObject, Deck
 
 
 class NoCapacityError(Exception):
@@ -19,7 +19,7 @@ class ShipBase:
 
     @property
     def mass_kg(self):
-        return self.base_mass_kg + sum(deck.stored_mass_kg for deck in self.decks.values())
+        return self.base_mass_kg + sum(deck.stored_mass_kg() for deck in self.decks.values())
 
     @property
     def weight_kg(self):
@@ -29,5 +29,5 @@ class ShipBase:
         for fuel_burned in self.thruster.fire(target_velocity, self.weight_kg, self.mass_kg):
             self.event_log.add(Event(time.time(), {'fuel_burned': fuel_burned}))
 
-    def store(self, deck_name: str, obj: WeightedObject):
+    def store(self, deck_name: str, obj: ShipObject):
         self.decks[deck_name].store(obj)

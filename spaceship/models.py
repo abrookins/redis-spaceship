@@ -29,5 +29,22 @@ class Event:
     data: Dict[str, Any]
 
 
+@dataclass
+class Person:
+    name: str
+    mass_kg: float
+    type: str = "person"
+
+
 velocity_schema = class_schema(Velocity)()
 direction_schema = class_schema(Direction)()
+event_schema = class_schema(Event)()
+person_schema = class_schema(Person)()
+
+
+# A dictionary of object schemas, keyed by type. We can use
+# this to look up an object schema given its type, e.g.
+# "person".
+object_schemas_by_type = {
+    "person": person_schema
+}

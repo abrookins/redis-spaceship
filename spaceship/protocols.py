@@ -17,13 +17,11 @@ class PropulsionSystem(Protocol):
         """Burn fuel until reaching the target velocity."""
 
 
-class WeightedObject(Protocol):
+class ShipObject(Protocol):
     @property
-    def weight_kg(self) -> float:
-        """The object's weight in kilograms."""
+    def mass_kg(self) -> float:
+        """The object's mass in kilograms."""
 
-
-class NamedObject(Protocol):
     @property
     def name(self) -> str:
         """The object's name."""
@@ -37,6 +35,14 @@ class Deck(Protocol):
     def capacity(self) -> float:
         """The current capacity of this deck."""
 
-    def store(self, object: WeightedObject):
+    def items(self) -> List[ShipObject]:
+        """Get the items stored in this deck."""
+
+    def store(self, object: ShipObject):
         """Store an object in this deck."""
 
+    def get(self, name: str) -> ShipObject:
+        """Return an item stored in the deck by name."""
+
+    def remove(self, name: str) -> ShipObject:
+        """Remove and return an item stored in the deck by name."""
