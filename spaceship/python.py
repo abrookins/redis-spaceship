@@ -5,7 +5,8 @@ from typing import Any, Dict, List, Union
 
 from .models import Direction, Event, Velocity
 from .protocols import (Deck, EventLog, PropulsionSystem, ShipObject)
-from .spaceship import NoCapacityError, ShipBase
+from .errors import NoCapacityError
+from .spaceship import ShipBase
 
 
 class ListEventLog(EventLog):
@@ -45,7 +46,7 @@ class DictDeck(Deck):
 
     def store(self, object: ShipObject):
         """Store an object in this deck."""
-        if not self.capacity_mass:
+        if object.mass > self.capacity_mass:
             raise NoCapacityError
         self.storage[object.name] = object
 

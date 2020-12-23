@@ -5,10 +5,6 @@ from .models import Velocity, Event
 from .protocols import EventLog, PropulsionSystem, ShipObject, Deck
 
 
-class NoCapacityError(Exception):
-    """There is no more capacity in this object."""
-
-
 class ShipBase:
     def __init__(self, event_log: EventLog, base_mass: float, thruster: PropulsionSystem,
                  decks: List[Deck]) -> None:

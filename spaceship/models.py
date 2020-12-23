@@ -36,6 +36,13 @@ class Person:
     type: str = "person"
 
 
+@dataclass
+class Vehicle:
+    name: str
+    mass: float
+    type: str = "vehicle"
+
+
 velocity_schema = class_schema(Velocity)()
 direction_schema = class_schema(Direction)()
 event_schema = class_schema(Event)()

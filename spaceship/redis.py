@@ -1,11 +1,12 @@
 import logging
 import math
 from os import times
-from typing import List, Union
+from typing import List
 
 from redis import Redis, WatchError
-from spaceship.protocols import Deck, PropulsionSystem, ShipObject
-from spaceship.spaceship import NoCapacityError, ShipBase
+from .errors import NoCapacityError
+from .protocols import Deck, PropulsionSystem, ShipObject
+from .spaceship import ShipBase
 
 from . import keys
 from .models import (Direction, Velocity, object_schemas_by_type,
