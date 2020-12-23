@@ -19,7 +19,7 @@ class PropulsionSystem(Protocol):
 
 class ShipObject(Protocol):
     @property
-    def mass_kg(self) -> float:
+    def mass(self) -> float:
         """The object's mass in kilograms."""
 
     @property
@@ -32,9 +32,6 @@ class Deck(Protocol):
     name: str  # The name of this deck.
     max_storage_kg: float  # The maximum storage of this deck in kilograms.
 
-    def capacity(self) -> float:
-        """The current capacity of this deck."""
-
     def items(self) -> List[ShipObject]:
         """Get the items stored in this deck."""
 
@@ -46,3 +43,11 @@ class Deck(Protocol):
 
     def remove(self, name: str) -> ShipObject:
         """Remove and return an item stored in the deck by name."""
+
+    @property
+    def capacity_kg(self) -> float:
+        """The current capacity of this deck."""
+
+    @property
+    def stored_mass(self) -> float:
+       """The current stored mass (in kilograms) of this deck."""

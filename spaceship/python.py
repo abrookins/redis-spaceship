@@ -35,16 +35,17 @@ class DictDeck(Deck):
         self.data = data['decks'][name] = {'objects': {}}
         self.storage = self.data['objects']
 
-    def stored_mass_kg(self):
-        return sum([obj.mass_kg for obj in self.data['objects'].values()])
+    def stored_mass(self):
+        return sum([obj.mass for obj in self.data['objects'].values()])
 
-    def capacity(self) -> float:
+    @property
+    def capacity_mass(self) -> float:
         """The current capacity of this deck."""
-        return self.max_storage_kg - self.stored_mass_kg()
+        return self.max_storage_kg - self.stored_mass()
 
     def store(self, object: ShipObject):
         """Store an object in this deck."""
-        if not self.capacity:
+        if not self.capacity_mass:
             raise NoCapacityError
         self.storage[object.name] = object
 
@@ -56,9 +57,9 @@ class DictThruster(PropulsionSystem):
     def __init__(self, data: Dict[Any, Any]):
         self.data = data
 
-    def fire(self, target_velocity: Velocity, ship_weight_kg: float, ship_mass_kg: float):
+    def fire(self, target_velocity: Velocity, ship_weight_kg: float, ship_mass: float):
         resultant_force = self.THRUST_PER_SECOND_NEWTONS - ship_weight_kg
-        acceleration_per_second_ms = resultant_force / ship_mass_kg
+        acceleration_per_second_ms = resultant_force / ship_mass
         acceleration_per_second_kmh = acceleration_per_second_ms * 3.6
         remainder, seconds_to_burn = math.modf(target_velocity.speed_kmh /
                                                acceleration_per_second_kmh)
@@ -86,11 +87,11 @@ class DictShip(ShipBase):
         return self.data['current_gravity']
 
     @property
-    def base_mass_kg(self):
-        return self.data['base_mass_kg']
+    def base_mass(self):
+        return self.data['base_mass']
 
-    @base_mass_kg.setter
-    def base_mass_kg(self, base_mass_kg):
-        self.data['base_mass_kg'] = base_mass_kg
+    @base_mass.setter
+    def base_mass(self, base_mass):
+        self.data['base_mass'] = base_mass
 
 

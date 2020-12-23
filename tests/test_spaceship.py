@@ -26,13 +26,13 @@ def redis():
 def dict_ship():
     data = {
         'speed_kmh': defaultdict(float),
-        'base_mass_kg': TWO_MILLION_KG,
-        'current_mass_kg': TWO_MILLION_KG,
+        'base_mass': TWO_MILLION_KG,
+        'current_mass': TWO_MILLION_KG,
         'current_gravity': EARTH_GRAVITY,
         'decks': {}
     }
     return DictShip(data,
-                    base_mass_kg=TWO_MILLION_KG,
+                    base_mass=TWO_MILLION_KG,
                     event_log=ListEventLog(),
                     decks=[DictDeck('main', data, 1000)],
                     thruster=DictThruster(data))
@@ -40,10 +40,10 @@ def dict_ship():
 
 @fixture
 def redis_ship(redis):
-    redis.set(keys.ship_current_mass_kg(), TWO_MILLION_KG)
+    redis.set(keys.ship_current_mass(), TWO_MILLION_KG)
     redis.set(keys.ship_current_gravity(), EARTH_GRAVITY)
     return RedisShip(redis,
-                     base_mass_kg=TWO_MILLION_KG,
+                     base_mass=TWO_MILLION_KG,
                      event_log=ListEventLog(),
                      decks=[HashDeck('main', redis, 1000)],
                      thruster=PipelineThruster(redis))
@@ -77,7 +77,7 @@ def test_accelerate_redis_ship(redis_ship: RedisShip):
 
 
 def test_load_dict_deck(dict_ship: DictShip):
-    bob = Person(name="Bob", mass_kg=86)
+    bob = Person(name="Bob", mass=86)
 
     assert dict_ship.weight_kg == TWO_MILLION_KG * EARTH_GRAVITY
     dict_ship.store('main', bob)
@@ -85,7 +85,7 @@ def test_load_dict_deck(dict_ship: DictShip):
 
 
 def test_redis_deck_store(redis_ship: RedisShip):
-    bob = Person(name="Bob", mass_kg=86)
+    bob = Person(name="Bob", mass=86)
 
     assert redis_ship.weight_kg == TWO_MILLION_KG * EARTH_GRAVITY
     redis_ship.store('main', bob)
@@ -94,8 +94,8 @@ def test_redis_deck_store(redis_ship: RedisShip):
     assert redis_ship.decks['main'].get("Bob") == bob
 
 
-def test_redis_deck_capacity(redis):
+def test_redis_deck_capacity_mass(redis):
     deck = HashDeck('main', redis, 1000)
-    bob = Person(name="Bob", mass_kg=86)
+    bob = Person(name="Bob", mass=86)
     deck.store(bob)
-    assert deck.capacity == 914
+    assert deck.capacity_mass== 914

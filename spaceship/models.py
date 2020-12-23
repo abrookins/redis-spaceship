@@ -32,7 +32,7 @@ class Event:
 @dataclass
 class Person:
     name: str
-    mass_kg: float
+    mass: float
     type: str = "person"
 
 

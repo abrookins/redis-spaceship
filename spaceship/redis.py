@@ -46,35 +46,39 @@ class HashDeck(Deck):
         deck_items_key = keys.deck_items_set(self.name)
         item_key = keys.deck_item(self.name, obj.name)
         schema = object_schemas_by_type.get(obj.type)
-        deck_mass_key = keys.deck_stored_mass_kg(self.name)
+        deck_mass_key = keys.deck_stored_mass(self.name)
+        retries = 3
 
         with self.redis.pipeline() as p:
             while True:
+                if retries == 0:
+                    break
                 try:
                     p.watch(deck_items_key)
-                    if obj.mass_kg > self.capacity:
+                    if obj.mass > self.capacity_mass:
                         raise NoCapacityError
                     p.multi()
-                    p.zadd(deck_items_key, {obj.name: obj.mass_kg})
+                    p.zadd(deck_items_key, {obj.name: obj.mass})
                     p.hset(item_key, mapping=schema.dump(obj))
-                    p.incrby(deck_mass_key, obj.mass_kg)
+                    p.incrby(deck_mass_key, obj.mass)
                     p.execute()
                     break
                 except WatchError:
                     times.sleep(1)
+                    retries -= 1
                     continue
                 finally:
                     p.reset()
 
     @property
-    def stored_mass_kg(self):
-        stored_mass = self.redis.get(keys.deck_stored_mass_kg(self.name))
+    def stored_mass(self):
+        stored_mass = self.redis.get(keys.deck_stored_mass(self.name))
         return float(stored_mass) if stored_mass else 0
 
     @property
-    def capacity(self) -> float:
+    def capacity_mass(self) -> float:
         """The current capacity of this deck."""
-        return self.max_storage_kg - self.stored_mass_kg
+        return self.max_storage_kg - self.stored_mass
 
     def get(self, item_name) -> ShipObject:
         item_key = keys.deck_item(self.name, item_name)
@@ -94,9 +98,9 @@ class PipelineThruster(PropulsionSystem):
     def __init__(self, redis: Redis):
         self.redis = redis
 
-    def fire(self, target_velocity: Velocity, ship_weight_kg: float, ship_mass_kg: float):
+    def fire(self, target_velocity: Velocity, ship_weight_kg: float, ship_mass: float):
         resultant_force = self.THRUST_PER_SECOND_NEWTONS - ship_weight_kg
-        acceleration_per_second_ms = resultant_force / ship_mass_kg
+        acceleration_per_second_ms = resultant_force / ship_mass
         acceleration_per_second_kmh = acceleration_per_second_ms * 3.6
         remainder, seconds_to_burn = math.modf(target_velocity.speed_kmh /
                                                acceleration_per_second_kmh)
@@ -127,9 +131,9 @@ class RedisShip(ShipBase):
 
     @property
     def base_weight_kg(self):
-        return float(self.redis.get(keys.ship_current_mass_kg()))
+        return float(self.redis.get(keys.ship_current_mass()))
 
     @property
-    def mass_kg(self):
-        return self.base_mass_kg + sum(deck.stored_mass_kg for deck in
+    def mass(self):
+        return self.base_mass + sum(deck.stored_mass for deck in
                                        self.decks.values())
