@@ -48,8 +48,6 @@ def test_accelerate_redis_ship(redis_ship: RedisShip):
     assert round(current_speed) == 500.0
 
 
-
-
 def test_redis_deck_store(redis_ship: RedisShip):
     bob = Person(name="Bob", mass=86)
 
@@ -60,11 +58,10 @@ def test_redis_deck_store(redis_ship: RedisShip):
     assert redis_ship.decks['main'].get("Bob") == bob
 
 
-def test_redis_deck_capacity_mass(redis):
-    deck = HashDeck('main', redis, 1000)
+def test_redis_deck_capacity_mass(redis_ship: RedisShip):
     bob = Person(name="Bob", mass=86)
-    deck.store(bob)
-    assert deck.capacity_mass== 914
+    redis_ship.decks['main'].store(bob)
+    assert redis_ship.decks['main'].capacity_mass== 914
 
 
 def test_redis_deck_over_capacity(redis):
@@ -73,4 +70,21 @@ def test_redis_deck_over_capacity(redis):
 
     with pytest.raises(NoCapacityError):
         deck.store(loader)
+
+
+def test_deck_mass_affects_ship_speed(redis_ship: RedisShip):
+    loader = Vehicle(name="loader mech", mass=750)
+    redis_ship.store('main', loader)
+
+    redis_ship.accelerate(Velocity(500, Direction.N))
+
+    assert len(redis_ship.event_log) == 10
+    for event in redis_ship.event_log.events[0:8]:
+        assert event.data == {'fuel_burned': 2}
+    assert redis_ship.event_log.events[9].data == {
+        'fuel_burned': 0.28612802400872894
+    }
+
+    current_speed = float(redis_ship.redis.get(keys.ship_current_speed(Direction.N.value)))
+    assert round(current_speed) == 500.0
 

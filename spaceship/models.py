@@ -47,11 +47,13 @@ velocity_schema = class_schema(Velocity)()
 direction_schema = class_schema(Direction)()
 event_schema = class_schema(Event)()
 person_schema = class_schema(Person)()
+vehicle_schema = class_schema(Vehicle)()
 
 
 # A dictionary of object schemas, keyed by type. We can use
 # this to look up an object schema given its type, e.g.
 # "person".
 object_schemas_by_type = {
-    "person": person_schema
+    "person": person_schema,
+    "vehicle": vehicle_schema,
 }
