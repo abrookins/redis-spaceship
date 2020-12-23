@@ -92,3 +92,10 @@ def test_redis_deck_store(redis_ship: RedisShip):
     assert redis_ship.weight_kg == (TWO_MILLION_KG + 86) * EARTH_GRAVITY
 
     assert redis_ship.decks['main'].get("Bob") == bob
+
+
+def test_redis_deck_capacity(redis):
+    deck = HashDeck('main', redis, 1000)
+    bob = Person(name="Bob", mass_kg=86)
+    deck.store(bob)
+    assert deck.capacity == 914

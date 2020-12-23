@@ -52,7 +52,7 @@ class HashDeck(Deck):
             while True:
                 try:
                     p.watch(deck_items_key)
-                    if obj.mass_kg > self.capacity(pipeline=p):
+                    if obj.mass_kg > self.capacity:
                         raise NoCapacityError
                     p.multi()
                     p.zadd(deck_items_key, {obj.name: obj.mass_kg})
@@ -66,13 +66,15 @@ class HashDeck(Deck):
                 finally:
                     p.reset()
 
-    def stored_mass_kg(self, pipeline=None):
-        client = pipeline if pipeline else self.redis
-        return client.get(keys.deck_stored_mass_kg(self.name)) or 0
+    @property
+    def stored_mass_kg(self):
+        stored_mass = self.redis.get(keys.deck_stored_mass_kg(self.name))
+        return float(stored_mass) if stored_mass else 0
 
-    def capacity(self, pipeline=None) -> float:
+    @property
+    def capacity(self) -> float:
         """The current capacity of this deck."""
-        return self.max_storage_kg - self.stored_mass_kg(pipeline=pipeline)
+        return self.max_storage_kg - self.stored_mass_kg
 
     def get(self, item_name) -> ShipObject:
         item_key = keys.deck_item(self.name, item_name)
@@ -129,9 +131,5 @@ class RedisShip(ShipBase):
 
     @property
     def mass_kg(self):
-        with self.redis.pipeline(transaction=False) as p:
-            for deck in self.decks.values():
-                deck.stored_mass_kg(pipeline=p)
-            deck_masses = [0 if mass is None else float(mass)
-                           for mass in p.execute()]
-        return self.base_mass_kg + sum(deck_masses)
+        return self.base_mass_kg + sum(deck.stored_mass_kg for deck in
+                                       self.decks.values())
