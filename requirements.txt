@@ -5,3 +5,6 @@ marshmallow-enum
 pylint
 yapf
 pytest
+
+# Building the book
+pandoc-include
