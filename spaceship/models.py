@@ -36,6 +36,7 @@ class Person:
     type: str = "person"
 
 
+
 @dataclass
 class Vehicle:
     name: str

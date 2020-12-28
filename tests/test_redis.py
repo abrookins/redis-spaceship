@@ -62,7 +62,7 @@ def test_redis_deck_store(redis_ship: RedisShip):
 def test_redis_deck_capacity_mass(redis_ship: RedisShip):
     bob = Person(name="Bob", mass=86)
     redis_ship.decks['main'].store(bob)
-    assert redis_ship.decks['main'].capacity_mass== 914
+    assert redis_ship.decks['main'].capacity_mass == 914
 
 
 def test_redis_deck_over_capacity(redis):
