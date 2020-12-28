@@ -4,9 +4,8 @@ from collections import defaultdict
 from typing import Any, Dict, List, Union
 
 from .models import Direction, Event, Velocity
-from .protocols import (Deck, EventLog, PropulsionSystem, ShipObject)
+from .protocols import (Deck, EventLog, PropulsionSystem, ShipObject, Ship)
 from .errors import NoCapacityError
-from .spaceship import ShipBase
 
 
 class ListEventLog(EventLog):
@@ -64,24 +63,37 @@ class DictThruster(PropulsionSystem):
         acceleration_per_second_kmh = acceleration_per_second_ms * 3.6
         remainder, seconds_to_burn = math.modf(target_velocity.speed_kmh /
                                                acceleration_per_second_kmh)
-
         direction = target_velocity.direction.value
+        target_burn = int(seconds_to_burn)
 
-        for _ in range(int(seconds_to_burn)):
+        for i in range(target_burn):
+            next_burn = self.FUEL_BURNED_PER_SECOND if i < target_burn else remainder
             self.data['speed_kmh'][direction] += acceleration_per_second_kmh
-            yield self.FUEL_BURNED_PER_SECOND
+            yield self.FUEL_BURNED_PER_SECOND, next_burn
 
         if remainder:
             self.data['speed_kmh'][direction] += acceleration_per_second_kmh * remainder
-            yield self.FUEL_BURNED_PER_SECOND * remainder
+            yield self.FUEL_BURNED_PER_SECOND * remainder, 0
 
 
-class DictShip(ShipBase):
-    def __init__(self, data: Dict[Any, Any], *args, **kwargs):
+class DictShip(Ship):
+    def __init__(self, data: Dict[Any, Any], event_log: EventLog, base_mass: float, thruster: PropulsionSystem,
+                 decks: List[Deck], low_fuel_threshold: float = 0) -> None:
         self.data = data
-        super().__init__(*args, **kwargs)
+        self.base_mass = base_mass
+        self.thruster = thruster
+        self.decks = {deck.name: deck for deck in decks}
+        self.event_log = event_log
         self.data['current_velocity'] = Velocity(0, Direction.N)
         self.data['acceleration'] = defaultdict(float)
+        self.low_fuel_threshold = low_fuel_threshold  # TODO: Belongs in data?
+
+    @property
+    def fuel(self):
+        total = self.data['current_fuel']  # TODO: This doesn't make sense. :P
+        burned = sum([l.data['fuel_burned'] for l in self.event_log.events
+                    if 'fuel_burned' in l.data])
+        return total - burned
 
     @property
     def current_gravity(self):

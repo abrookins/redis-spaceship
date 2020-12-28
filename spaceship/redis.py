@@ -5,8 +5,7 @@ from typing import List
 
 from redis import Redis, WatchError
 from .errors import NoCapacityError
-from .protocols import Deck, PropulsionSystem, ShipObject
-from .spaceship import ShipBase
+from .protocols import Deck, EventLog, PropulsionSystem, ShipObject, Ship
 
 from . import keys
 from .models import (Direction, Velocity, object_schemas_by_type,
@@ -100,31 +99,41 @@ class PipelineThruster(PropulsionSystem):
         self.redis = redis
 
     def fire(self, target_velocity: Velocity, ship_weight_kg: float, ship_mass: float):
+        # TODO: Separate reusable math?
         resultant_force = self.THRUST_PER_SECOND_NEWTONS - ship_weight_kg
         acceleration_per_second_ms = resultant_force / ship_mass
         acceleration_per_second_kmh = acceleration_per_second_ms * 3.6
         remainder, seconds_to_burn = math.modf(target_velocity.speed_kmh /
                                                acceleration_per_second_kmh)
         key = keys.ship_current_speed(target_velocity.direction.value)
+        target_burn = int(seconds_to_burn)
 
         with self.redis.pipeline(transaction=False) as p:
-            # TODO: Coroutine -- yield from caller; caller decides
-            # whether to continue the burn after examining fuel burned?
-            for _ in range(int(seconds_to_burn)):
+            for i in range(target_burn):
                 self.redis.incrbyfloat(key, acceleration_per_second_kmh)
-                yield self.FUEL_BURNED_PER_SECOND
+                next_burn = self.FUEL_BURNED_PER_SECOND if i < target_burn else remainder
+                yield self.FUEL_BURNED_PER_SECOND, next_burn
             p.execute()
 
         if remainder:
             self.redis.incrbyfloat(key, acceleration_per_second_kmh * remainder)
-            yield self.FUEL_BURNED_PER_SECOND * remainder
+            yield self.FUEL_BURNED_PER_SECOND * remainder, 0
 
 
-class RedisShip(ShipBase):
-    def __init__(self, redis: Redis, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+class RedisShip(Ship):
+    def __init__(self, redis: Redis, event_log: EventLog, base_mass: float, thruster: PropulsionSystem,
+                 decks: List[Deck], low_fuel_threshold: float = 0) -> None:
+        self.base_mass = base_mass
+        self.thruster = thruster
+        self.decks = {deck.name: deck for deck in decks}
+        self.event_log = event_log
         self.redis = redis
         self.redis['current_velocity'] = velocity_schema.dumps(Velocity(0, Direction.N))
+        self.low_fuel_threshold = low_fuel_threshold
+
+    @property
+    def fuel(self):
+        return float(self.redis.get(keys.ship_current_fuel()))
 
     @property
     def current_gravity(self):

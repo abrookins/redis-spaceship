@@ -1,6 +1,7 @@
-from typing import Protocol, List
+import time
+from typing import List, Protocol
 
-from .models import Velocity, Event
+from .models import Event, Velocity
 
 
 class EventLog(Protocol):
@@ -51,3 +52,42 @@ class Deck(Protocol):
     @property
     def stored_mass(self) -> float:
        """The current stored mass (in kilograms) of this deck."""
+
+
+
+class Ship(Protocol):
+    """A ship."""
+    thruster: PropulsionSystem
+    decks: List[Deck]
+    event_log: EventLog
+    low_fuel_threshold: float
+
+    @property
+    def fuel(self) -> float:
+        """Current fuel."""
+
+    @property
+    def mass(self) -> float:
+        """The total current mass of the ship, including decks."""
+        return self.base_mass + sum(deck.stored_mass() for deck in self.decks.values())
+
+    @property
+    def weight_kg(self) -> float:
+        """The weight of the ship given its mass and current gravity."""
+        return self.mass * self.current_gravity
+
+    def accelerate(self, target_velocity: Velocity):
+        """Accelerate the ship to a target velocity.
+
+        Acceleration stops when either the ship reaches that velocity, or
+        remaining fuel reaches the configured low fuel threshold.
+        """
+        for fuel_burned, next_burn in self.thruster.fire(target_velocity, self.weight_kg, self.mass):
+            self.event_log.add(Event(time.time(), {'fuel_burned': fuel_burned, 'next_burn': next_burn}))
+            remaining_fuel = self.fuel - self.low_fuel_threshold
+            if remaining_fuel < next_burn:
+                break
+
+    def store(self, deck_name: str, obj: ShipObject):
+        """Store an object in a deck."""
+        self.decks[deck_name].store(obj)

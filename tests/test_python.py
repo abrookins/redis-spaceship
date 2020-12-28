@@ -18,13 +18,15 @@ def dict_ship():
         'base_mass': TWO_MILLION_KG,
         'current_mass': TWO_MILLION_KG,
         'current_gravity': EARTH_GRAVITY,
+        'current_fuel': 100000,
         'decks': {}
     }
     return DictShip(data,
                     base_mass=TWO_MILLION_KG,
                     event_log=ListEventLog(),
                     decks=[DictDeck('main', data, 1000)],
-                    thruster=DictThruster(data))
+                    thruster=DictThruster(data),
+                    low_fuel_threshold=100)
 
 
 def test_accelerate_dict_ship(dict_ship: DictShip):
@@ -32,12 +34,23 @@ def test_accelerate_dict_ship(dict_ship: DictShip):
 
     assert len(dict_ship.event_log) == 10
     for event in dict_ship.event_log.events[0:8]:
-        assert event.data == {'fuel_burned': 2}
+        assert event.data == {'fuel_burned': 2, 'next_burn': 2}
     assert dict_ship.event_log.events[9].data == {
-        'fuel_burned': 0.27485380116959135
+        'fuel_burned': 0.27485380116959135, 'next_burn': 0
     }
 
     assert round(dict_ship.data['speed_kmh'][Direction.N.value]) == 500.0
+
+def test_stops_accelerating_at_low_fuel_threshold(dict_ship: DictShip):
+    dict_ship.data['current_fuel'] = 102
+    dict_ship.accelerate(Velocity(500, Direction.N))
+
+    assert len(dict_ship.event_log) == 1
+    assert dict_ship.event_log.events[0].data == {
+        'fuel_burned': 2, 'next_burn': 2
+    }
+
+    assert round(dict_ship.data['speed_kmh'][Direction.N.value]) == 55
 
 
 def test_load_dict_deck(dict_ship: DictShip):
@@ -63,9 +76,9 @@ def test_deck_mass_affects_ship_speed(dict_ship: DictShip):
 
     assert len(dict_ship.event_log) == 10
     for event in dict_ship.event_log.events[0:8]:
-        assert event.data == {'fuel_burned': 2}
+        assert event.data == {'fuel_burned': 2, 'next_burn': 2}
     assert dict_ship.event_log.events[9].data == {
-        'fuel_burned': 0.28612802400872894
+        'fuel_burned': 0.28612802400872894, 'next_burn': 0
     }
 
     assert round(dict_ship.data['speed_kmh'][Direction.N.value]) == 500.0

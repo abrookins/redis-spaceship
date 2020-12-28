@@ -26,6 +26,7 @@ def redis():
 def redis_ship(redis):
     redis.set(keys.ship_current_mass(), TWO_MILLION_KG)
     redis.set(keys.ship_current_gravity(), EARTH_GRAVITY)
+    redis.set(keys.ship_current_fuel(), 100000)
     return RedisShip(redis,
                      base_mass=TWO_MILLION_KG,
                      event_log=ListEventLog(),
@@ -39,9 +40,9 @@ def test_accelerate_redis_ship(redis_ship: RedisShip):
 
     assert len(redis_ship.event_log) == 10
     for event in redis_ship.event_log.events[0:8]:
-        assert event.data == {'fuel_burned': 2}
+        assert event.data == {'fuel_burned': 2, 'next_burn': 2}
     assert redis_ship.event_log.events[9].data == {
-        'fuel_burned': 0.27485380116959135
+        'fuel_burned': 0.27485380116959135, 'next_burn': 0
     }
 
     current_speed = float(redis_ship.redis.get(keys.ship_current_speed(Direction.N.value)))
@@ -80,9 +81,9 @@ def test_deck_mass_affects_ship_speed(redis_ship: RedisShip):
 
     assert len(redis_ship.event_log) == 10
     for event in redis_ship.event_log.events[0:8]:
-        assert event.data == {'fuel_burned': 2}
+        assert event.data == {'fuel_burned': 2, 'next_burn': 2}
     assert redis_ship.event_log.events[9].data == {
-        'fuel_burned': 0.28612802400872894
+        'fuel_burned': 0.28612802400872894, 'next_burn': 0
     }
 
     current_speed = float(redis_ship.redis.get(keys.ship_current_speed(Direction.N.value)))

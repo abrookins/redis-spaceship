@@ -18,6 +18,10 @@ def ship_current_gravity():
     return f"{PREFIX}:ship:current_gravity"
 
 
+def ship_current_fuel():
+    return f"{PREFIX}:ship:current_fuel"
+
+
 def deck_stored_mass(deck_name: str):
     return f"{PREFIX}:deck:{deck_name}:stored_mass"
 
