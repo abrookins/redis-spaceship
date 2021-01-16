@@ -1,11 +1,11 @@
 import logging
 import math
 from os import times
-from typing import List
+from typing import List, Union
 
 from redis import Redis, WatchError
 from .errors import NoCapacityError
-from .protocols import Deck, EventLog, PropulsionSystem, ShipObject, Ship
+from .protocols import Deck, EventLog, PropulsionSystem, ShipObject, Ship, ShipObjectContainer
 
 from . import keys
 from .models import (Direction, Velocity, object_schemas_by_type,
@@ -42,12 +42,17 @@ class HashDeck(Deck):
 
         return items
 
-    def store(self, obj: ShipObject):
+    def store(self, obj: Union[ShipObject, ShipObjectContainer]):
         deck_items_key = keys.deck_items_set(self.name)
         item_key = keys.deck_item(self.name, obj.name)
         schema = object_schemas_by_type.get(obj.type)
         deck_mass_key = keys.deck_stored_mass(self.name)
+        objects = []
         retries = 3
+
+        if hasattr(obj, 'objects'):
+            # This is a container, so we need to be persist its objects.
+            objects = obj.objects
 
         with self.redis.pipeline() as p:
             while True:
@@ -55,11 +60,29 @@ class HashDeck(Deck):
                     break
                 try:
                     p.watch(deck_items_key)
+                    # The mass of a vehicle includes any objects it carries, so
+                    # we don't need to check the mass of individual objects in
+                    # a container.
                     if obj.mass > self.capacity_mass:
                         raise NoCapacityError
                     p.multi()
+
+                    object_dict = schema.dump(obj)
+                    # Redis can't store lists in a hash, so we persist objects
+                    # within a container object separately.
+                    object_dict.pop('objects', None)
+
+                    # Persist objects in a container in their own hashes -- and
+                    # link them to the container using a sorted set.
+                    for contained_obj in objects:
+                        item_schema = object_schemas_by_type[contained_obj.type]
+                        container_key = keys.container_items_set(obj.name)
+                        container_item_key = keys.container_item(obj.name, contained_obj.name)
+                        p.zadd(container_key, {contained_obj.name: contained_obj.mass})
+                        p.hset(container_item_key, mapping=item_schema.dump(contained_obj))
+
                     p.zadd(deck_items_key, {obj.name: obj.mass})
-                    p.hset(item_key, mapping=schema.dump(obj))
+                    p.hset(item_key, mapping=object_dict)
                     p.incrby(deck_mass_key, obj.mass)
                     p.execute()
                     break
@@ -80,16 +103,39 @@ class HashDeck(Deck):
         """The current capacity of this deck."""
         return self.max_storage_kg - self.stored_mass
 
-    def get(self, item_name) -> ShipObject:
-        item_key = keys.deck_item(self.name, item_name)
-        hash = self.redis.hgetall(item_key)
-        schema = object_schemas_by_type.get(hash['type'])
+    def load_object(self, redis_hash):
+        schema = object_schemas_by_type.get(redis_hash['type'])
+        item_name = redis_hash.get('name') or 'Unknown'
 
         if not schema:
             raise InvalidItem(item_name)
 
-        return schema.load(hash)
+        obj = schema.load(redis_hash)
+        return obj
 
+    def get(self, name) -> ShipObject:
+        item_key = keys.deck_item(self.name, name)
+        redis_hash = self.redis.hgetall(item_key)
+        obj = self.load_object(redis_hash)
+
+        if obj.type != 'vehicle':
+            return obj
+
+        # If this is a container type, we need to find all of its
+        # objects and load them.
+        container_key = keys.container_items_set(obj.name)
+        container_object_names = self.redis.zrange(container_key, 0, -1)
+        with self.redis.pipeline(transaction=False) as p:
+            for _name in container_object_names:
+                container_item_key = keys.container_item(obj.name, _name)
+                p.hgetall(container_item_key)
+            hashes = p.execute()
+
+        for _hash in hashes:
+            container_obj = self.load_object(_hash)
+            obj.objects.append(container_obj)
+
+        return obj
 
 class PipelineThruster(PropulsionSystem):
     THRUST_PER_SECOND_NEWTONS = 5e7  # 50 million newtons

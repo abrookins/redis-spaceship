@@ -1,6 +1,7 @@
 from enum import Enum
-from dataclasses import dataclass
-from typing import Dict, Any
+from dataclasses import dataclass, field
+from typing import Dict, Any, List, Union
+import marshmallow
 
 from marshmallow_dataclass import class_schema
 
@@ -30,23 +31,35 @@ class Event:
 
 
 @dataclass
+class Object:
+    name: str
+    mass: float
+    type: str = "object"
+
+
+@dataclass
 class Person:
     name: str
     mass: float
     type: str = "person"
 
 
-
 @dataclass
 class Vehicle:
     name: str
-    mass: float
+    base_mass: float
+    objects: List[Union[Person, Object]] = field(default_factory=list)
     type: str = "vehicle"
+
+    @property
+    def mass(self) ->float:
+        return self.base_mass + sum(o.mass for o in self.objects)
 
 
 velocity_schema = class_schema(Velocity)()
 direction_schema = class_schema(Direction)()
 event_schema = class_schema(Event)()
+object_schema = class_schema(Object)()
 person_schema = class_schema(Person)()
 vehicle_schema = class_schema(Vehicle)()
 
@@ -56,5 +69,6 @@ vehicle_schema = class_schema(Vehicle)()
 # "person".
 object_schemas_by_type = {
     "person": person_schema,
+    "object": object_schema,
     "vehicle": vehicle_schema,
 }

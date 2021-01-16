@@ -19,6 +19,7 @@ class PropulsionSystem(Protocol):
 
 
 class ShipObject(Protocol):
+    """An object inside the ship, which has mass."""
     @property
     def mass(self) -> float:
         """The object's mass in kilograms."""
@@ -26,6 +27,11 @@ class ShipObject(Protocol):
     @property
     def name(self) -> str:
         """The object's name."""
+
+
+class ShipObjectContainer(ShipObject):
+    """A ship object that can contain other ShipObjects."""
+    objects: List[ShipObject]
 
 
 class Deck(Protocol):

@@ -33,10 +33,18 @@
 - ** STORY / ART **
 - A deck that contains a Vehicle that contains a Person
 - Explain the data model
+- We're going to see how this works with Hashes and then RedisJSON
+
+## Hash Implementation
+
 - (Intro) With Redis Hashes: serialize to multiple hashes and sets
+- Code walk-through
+- Ups: No module; integrates well with RediSearch
+- Downside: serialized nested structures
+
+## RedisJSON Implementation
+
 - (Intro) With RedisJSON: single document with nested objects
-
-### Hashes
-
-- How to do it
-- Code includes
+- Code walk-through
+- Upside: Nested structures work well
+- Downside: Doesn't work yet with RediSearch

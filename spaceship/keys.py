@@ -32,3 +32,12 @@ def deck_items_set(deck_name:str):
 
 def deck_item(deck_name: str, item_name: str):
     return f"{PREFIX}:{deck_name}:{item_name}"
+
+
+def container_item(container_name: str, item_name: str):
+    return f"{PREFIX}:{container_name}:{item_name}"
+
+
+def container_items_set(container_name:str):
+    return f"{PREFIX}:container:{container_name}:items"
+

@@ -59,6 +59,17 @@ def test_redis_deck_store(redis_ship: RedisShip):
     assert redis_ship.decks['main'].get("Bob") == bob
 
 
+def test_redis_deck_store_nested_object(redis_ship: RedisShip):
+    bob = Person(name="Bob", mass=86)
+    rover = Vehicle(name="rover", objects=[bob], base_mass=500)
+
+    assert redis_ship.weight_kg == TWO_MILLION_KG * EARTH_GRAVITY
+    redis_ship.store('main', rover)
+    assert redis_ship.weight_kg == (TWO_MILLION_KG + 500 + 86) * EARTH_GRAVITY
+
+    assert redis_ship.decks['main'].get("rover") == rover
+
+
 def test_redis_deck_capacity_mass(redis_ship: RedisShip):
     bob = Person(name="Bob", mass=86)
     redis_ship.decks['main'].store(bob)
@@ -67,14 +78,14 @@ def test_redis_deck_capacity_mass(redis_ship: RedisShip):
 
 def test_redis_deck_over_capacity(redis):
     deck = HashDeck('main', redis, 1000)
-    loader = Vehicle(name="loader mech", mass=1500)
+    loader = Vehicle(name="loader mech", base_mass=1500)
 
     with pytest.raises(NoCapacityError):
         deck.store(loader)
 
 
 def test_deck_mass_affects_ship_speed(redis_ship: RedisShip):
-    loader = Vehicle(name="loader mech", mass=750)
+    loader = Vehicle(name="loader mech", base_mass=750)
     redis_ship.store('main', loader)
 
     redis_ship.accelerate(Velocity(500, Direction.N))

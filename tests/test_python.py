@@ -62,14 +62,14 @@ def test_load_dict_deck(dict_ship: DictShip):
 
 
 def test_load_dict_deck_over_capacity(dict_ship: DictShip):
-    loader = Vehicle(name="loader mech", mass=1500)
+    loader = Vehicle(name="loader mech", base_mass=1500)
 
     with pytest.raises(NoCapacityError):
         dict_ship.store('main', loader)
 
 
 def test_deck_mass_affects_ship_speed(dict_ship: DictShip):
-    loader = Vehicle(name="loader mech", mass=750)
+    loader = Vehicle(name="loader mech", base_mass=750)
     dict_ship.store('main', loader)
 
     dict_ship.accelerate(Velocity(500, Direction.N))
