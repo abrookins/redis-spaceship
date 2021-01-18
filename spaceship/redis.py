@@ -2,6 +2,7 @@ import logging
 import math
 from os import times
 from typing import List, Union, Dict, Any
+from redis.client import Pipeline
 
 from rejson import Client as JsonClient
 from redis import Redis, WatchError
@@ -60,50 +61,38 @@ class HashDeck(Deck):
         schema = object_schemas_by_type.get(obj.type)
         deck_mass_key = keys.deck_stored_mass(self.name)
         objects = {}
-        retries = 3
 
         if hasattr(obj, 'objects'):
             # This is a container, so we need to be persist its objects.
             objects = obj.objects
 
-        with self.redis.pipeline() as p:
-            while True:
-                if retries == 0:
-                    break
-                try:
-                    p.watch(deck_items_key)
-                    # The mass of a vehicle includes any objects it carries, so
-                    # we don't need to check the mass of individual objects in
-                    # a container.
-                    if obj.mass > self.capacity_mass:
-                        raise NoCapacityError
-                    p.multi()
+        def _store(p: Pipeline):
+            # The mass of a vehicle includes any objects it carries, so
+            # we don't need to check the mass of individual objects in
+            # a container.
+            if obj.mass > self.capacity_mass:
+                raise NoCapacityError
+            p.multi()
 
-                    object_dict = schema.dump(obj)
-                    # Redis can't store lists in a hash, so we persist objects
-                    # within a container object separately.
-                    object_dict.pop('objects', None)
+            object_dict = schema.dump(obj)
+            # Redis can't store lists in a hash, so we persist objects
+            # within a container object separately.
+            object_dict.pop('objects', None)
 
-                    # Persist objects in a container in their own hashes -- and
-                    # link them to the container using a sorted set.
-                    for contained_obj in objects.values():
-                        item_schema = object_schemas_by_type[contained_obj.type]
-                        container_key = keys.container_items_set(obj.name)
-                        container_item_key = keys.container_item(obj.name, contained_obj.name)
-                        p.zadd(container_key, {contained_obj.name: contained_obj.mass})
-                        p.hset(container_item_key, mapping=item_schema.dump(contained_obj))
+            # Persist objects in a container in their own hashes -- and
+            # link them to the container using a sorted set.
+            for contained_obj in objects.values():
+                item_schema = object_schemas_by_type[contained_obj.type]
+                container_key = keys.container_items_set(obj.name)
+                container_item_key = keys.container_item(obj.name, contained_obj.name)
+                p.zadd(container_key, {contained_obj.name: contained_obj.mass})
+                p.hset(container_item_key, mapping=item_schema.dump(contained_obj))
 
-                    p.zadd(deck_items_key, {obj.name: obj.mass})
-                    p.hset(item_key, mapping=object_dict)
-                    p.incrby(deck_mass_key, obj.mass)
-                    p.execute()
-                    break
-                except WatchError:
-                    times.sleep(1)
-                    retries -= 1
-                    continue
-                finally:
-                    p.reset()
+            p.zadd(deck_items_key, {obj.name: obj.mass})
+            p.hset(item_key, mapping=object_dict)
+            p.incrby(deck_mass_key, obj.mass)
+
+        self.redis.transaction(_store, deck_items_key)
 
     @property
     def stored_mass(self):
@@ -166,43 +155,31 @@ class JsonDeck(Deck):
         deck_items_key = keys.deck_items_json(self.name)
         schema = object_schemas_by_type.get(obj.type)
         objects = None
-        retries = 3
 
         if hasattr(obj, 'objects'):
             # This is a container, so we need to be persist its objects.
             objects = obj.objects
 
-        with self.redis.pipeline() as p:
-            while True:
-                if retries == 0:
-                    break
-                try:
-                    p.watch(deck_items_key)
-                    # The mass of a vehicle includes any objects it carries, so
-                    # we don't need to check the mass of individual objects in
-                    # a container.
-                    if obj.mass > self.capacity_mass:
-                        raise NoCapacityError
-                    p.multi()
+        def _store(p: Pipeline):
+            # The mass of a vehicle includes any objects it carries, so
+            # we don't need to check the mass of individual objects in
+            # a container.
+            if obj.mass > self.capacity_mass:
+                raise NoCapacityError
+            p.multi()
 
-                    object_dict = schema.dump(obj)
+            object_dict = schema.dump(obj)
 
-                    if objects:
-                        object_dict['objects'] = {}
-                        for contained_obj in objects.values():
-                            item_schema = object_schemas_by_type[contained_obj.type]
-                            object_dict['objects'][contained_obj.name] = item_schema.dump(contained_obj)
+            if objects:
+                object_dict['objects'] = {}
+                for contained_obj in objects.values():
+                    item_schema = object_schemas_by_type[contained_obj.type]
+                    object_dict['objects'][contained_obj.name] = item_schema.dump(contained_obj)
 
-                    p.jsonset(deck_items_key, f'.objects.{obj.name}', object_dict)
-                    p.jsonnumincrby(deck_items_key, '.mass', obj.mass)
-                    p.execute()
-                    break
-                except WatchError:
-                    times.sleep(1)
-                    retries -= 1
-                    continue
-                finally:
-                    p.reset()
+            p.jsonset(deck_items_key, f'.objects.{obj.name}', object_dict)
+            p.jsonnumincrby(deck_items_key, '.mass', obj.mass)
+
+        self.redis.transaction(_store, deck_items_key)
 
     @property
     def stored_mass(self):
