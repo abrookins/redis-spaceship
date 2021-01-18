@@ -2,11 +2,12 @@ import pytest
 from spaceship import keys
 from pytest import fixture
 from redis import Redis
+from rejson import Client as JsonClient
 
 from spaceship.models import Direction, Person, Vehicle, Velocity
 from spaceship.errors import NoCapacityError
 from spaceship.python import ListEventLog
-from spaceship.redis import HashDeck, RedisShip, PipelineThruster
+from spaceship.redis import HashDeck, JsonDeck, RedisShip, PipelineThruster
 
 
 EARTH_GRAVITY = 9.8
@@ -16,21 +17,30 @@ TWO_MILLION_KG = 2e6
 
 @fixture
 def redis():
-    # TODO: Port, etc.
-    r = Redis(decode_responses=True)
+    # TODO: Port from env, etc.
+    r = Redis(decode_responses=True, port=6380)
     yield r
     r.flushdb()
 
 
 @fixture
-def redis_ship(redis):
+def rejson():
+    # TODO: Port from env, etc.
+    r = JsonClient(decode_responses=True, port=6380)
+    yield r
+    r.flushdb()
+
+
+@fixture
+def redis_ship(redis, rejson):
     redis.set(keys.ship_current_mass(), TWO_MILLION_KG)
     redis.set(keys.ship_current_gravity(), EARTH_GRAVITY)
     redis.set(keys.ship_current_fuel(), 100000)
     return RedisShip(redis,
                      base_mass=TWO_MILLION_KG,
                      event_log=ListEventLog(),
-                     decks=[HashDeck('main', redis, 1000)],
+                     decks=[HashDeck('main', redis, 1000),
+                            JsonDeck('quarters', rejson, 1000)],
                      thruster=PipelineThruster(redis))
 
 
@@ -49,7 +59,7 @@ def test_accelerate_redis_ship(redis_ship: RedisShip):
     assert round(current_speed) == 500.0
 
 
-def test_redis_deck_store(redis_ship: RedisShip):
+def test_hash_deck_store(redis_ship: RedisShip):
     bob = Person(name="Bob", mass=86)
 
     assert redis_ship.weight_kg == TWO_MILLION_KG * EARTH_GRAVITY
@@ -59,9 +69,9 @@ def test_redis_deck_store(redis_ship: RedisShip):
     assert redis_ship.decks['main'].get("Bob") == bob
 
 
-def test_redis_deck_store_nested_object(redis_ship: RedisShip):
+def test_hash_deck_store_nested_object(redis_ship: RedisShip):
     bob = Person(name="Bob", mass=86)
-    rover = Vehicle(name="rover", objects=[bob], base_mass=500)
+    rover = Vehicle(name="rover", objects={"Bob": bob}, base_mass=500)
 
     assert redis_ship.weight_kg == TWO_MILLION_KG * EARTH_GRAVITY
     redis_ship.store('main', rover)
@@ -70,14 +80,49 @@ def test_redis_deck_store_nested_object(redis_ship: RedisShip):
     assert redis_ship.decks['main'].get("rover") == rover
 
 
-def test_redis_deck_capacity_mass(redis_ship: RedisShip):
+def test_hash_deck_capacity_mass(redis_ship: RedisShip):
     bob = Person(name="Bob", mass=86)
     redis_ship.decks['main'].store(bob)
     assert redis_ship.decks['main'].capacity_mass == 914
 
 
-def test_redis_deck_over_capacity(redis):
+def test_hash_deck_over_capacity(redis):
     deck = HashDeck('main', redis, 1000)
+    loader = Vehicle(name="loader mech", base_mass=1500)
+
+    with pytest.raises(NoCapacityError):
+        deck.store(loader)
+
+
+def test_json_deck_store(redis_ship: RedisShip):
+    bob = Person(name="Bob", mass=86)
+
+    assert redis_ship.weight_kg == TWO_MILLION_KG * EARTH_GRAVITY
+    redis_ship.store('quarters', bob)
+    assert redis_ship.weight_kg == (TWO_MILLION_KG + 86) * EARTH_GRAVITY
+
+    assert redis_ship.decks['quarters'].get("Bob") == bob
+
+
+def test_json_deck_store_nested_object(redis_ship: RedisShip):
+    bob = Person(name="Bob", mass=86)
+    rover = Vehicle(name="rover", objects={"Bob": bob}, base_mass=500)
+
+    assert redis_ship.weight_kg == TWO_MILLION_KG * EARTH_GRAVITY
+    redis_ship.store('quarters', rover)
+    assert redis_ship.weight_kg == (TWO_MILLION_KG + 500 + 86) * EARTH_GRAVITY
+
+    assert redis_ship.decks['quarters'].get("rover") == rover
+
+
+def test_json_deck_capacity_mass(redis_ship: RedisShip):
+    bob = Person(name="Bob", mass=86)
+    redis_ship.decks['quarters'].store(bob)
+    assert redis_ship.decks['quarters'].capacity_mass == 914
+
+
+def test_json_deck_over_capacity(redis):
+    deck = HashDeck('quarters', redis, 1000)
     loader = Vehicle(name="loader mech", base_mass=1500)
 
     with pytest.raises(NoCapacityError):

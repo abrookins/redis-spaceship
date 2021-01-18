@@ -48,12 +48,12 @@ class Person:
 class Vehicle:
     name: str
     base_mass: float
-    objects: List[Union[Person, Object]] = field(default_factory=list)
+    objects: Dict[str, Union[Person, Object]] = field(default_factory=dict)
     type: str = "vehicle"
 
     @property
     def mass(self) ->float:
-        return self.base_mass + sum(o.mass for o in self.objects)
+        return self.base_mass + sum(o.mass for o in self.objects.values())
 
 
 velocity_schema = class_schema(Velocity)()
