@@ -3,7 +3,7 @@ version: "3.8"
 services:
   redis:
     image: "redislabs/redismod"
-    entrypoint: ["redis-server", "--appendonly", "yes"]
+    entrypoint: ["redis-server", "--appendonly", "yes", "--loadmodule", "/usr/lib/redis/modules/rejson.so"]
     restart: always
     ports:
       - "6380:6379"
