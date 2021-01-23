@@ -1,0 +1,11 @@
+version: "3.8"
+
+services:
+  redis:
+    image: "redislabs/redismod"
+    entrypoint: ["redis-server", "--appendonly", "yes"]
+    restart: always
+    ports:
+      - "6380:6379"
+    volumes:
+      - ./data:/data
