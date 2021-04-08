@@ -1,0 +1,12 @@
+redis==3.5.3
+rejson==0.5.3
+marshmallow-dataclass
+marshmallow-enum
+typeguard
+
+pylint
+yapf
+pytest
+
+# Building the book
+pandoc-include
