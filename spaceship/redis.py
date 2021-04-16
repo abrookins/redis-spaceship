@@ -5,7 +5,7 @@ from typing import List, Union, Dict, Any
 from redis.client import Pipeline
 
 from rejson import Client as JsonClient
-from redis import Redis, WatchError
+from redis import Redis
 from .errors import NoCapacityError
 from .protocols import Deck, EventLog, PropulsionSystem, ShipObject, Ship, ShipObjectContainer
 
@@ -146,7 +146,8 @@ class JsonDeck(Deck):
         for obj in objects.values():
             schema = object_schemas_by_type.get(obj['type'])
             if not schema:
-                logging.error("Unknown object in deck: hash")
+                logging.error("Skipping unrecognized object in deck: %", obj['type'])
+                continue
             items.append(schema.load(obj))
 
         return items
