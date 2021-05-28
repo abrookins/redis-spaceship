@@ -73,24 +73,25 @@ class HashDeck(Deck):
         deck_items_key = keys.deck_items_set(self.name)
         item_key = keys.deck_item(self.name, obj.name)
         deck_mass_key = keys.deck_stored_mass(self.name)
-        schema = object_schemas_by_type.get(obj.type)
+        schema = object_schemas_by_type.get(obj.type)          # <1>
 
-        object_dict = schema.dump(obj)
+        object_dict = schema.dump(obj)                         # <2>
 
-        self.redis.zadd(deck_items_key, {obj.name: obj.mass})
-        self.redis.hset(item_key, mapping=object_dict)
-        self.redis.incrby(deck_mass_key, obj.mass)
+        self.redis.zadd(deck_items_key, {obj.name: obj.mass})  # <3>
+        self.redis.hset(item_key, mapping=object_dict)         # <4>
+        self.redis.incrby(deck_mass_key, obj.mass)             # <5>
     # end::store-basic[]
 
+    # tag::store-non-optimized[]
     def store_non_optimized(self, obj: Union[ShipObject, ShipObjectContainer]):
-        """Store ShipObject or ShipObjectContainer in this deck.
+        """Store ShipObject or ShipObjectContainer in this deck.  <1>
 
         This method improves on store_non_container() to store either
         non-container objects or "container" objects, which are objects that
         can contain other objects.
 
-        NOTE: This is a simple version of the store() method that does not make
-        any atomicity guarantees. See store() for a version that uses the
+        NOTE: This version of the store() method that does not make any
+        atomicity guarantees. See store() for a version that uses the
         redis.transaction() helper to make this update atomic.
         """
         # The mass of a vehicle includes any objects it carries, so
@@ -107,7 +108,7 @@ class HashDeck(Deck):
 
         object_dict = schema.dump(obj)
 
-        if hasattr(obj, 'objects'):
+        if hasattr(obj, 'objects'):             # <2>
             # This is a container, so we need to be persist its objects.
             objects = obj.objects
 
@@ -117,10 +118,7 @@ class HashDeck(Deck):
 
         # Persist objects in a container in their own hashes -- and
         # link them to the container using a sorted set.
-        for contained_obj in objects.values():
-            # TODO: We don't handle containers within containers...
-            # To keep things simple, we should raise an exception if
-            # you try to put a container inside of another container.
+        for contained_obj in objects.values():  # <3>
             item_schema = object_schemas_by_type[contained_obj.type]
             container_key = keys.container_items_set(obj.name)
             container_item_key = keys.container_item(obj.name, contained_obj.name)
@@ -130,6 +128,7 @@ class HashDeck(Deck):
         self.redis.zadd(deck_items_key, {obj.name: obj.mass})
         self.redis.hset(item_key, mapping=object_dict)
         self.redis.incrby(deck_mass_key, obj.mass)
+    # tag::store-non-optimized[]
 
     def store(self, obj: Union[ShipObject, ShipObjectContainer]):
         deck_items_key = keys.deck_items_set(self.name)
