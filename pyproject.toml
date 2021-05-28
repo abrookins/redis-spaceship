@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "redis-spaceship"
+version = "0.1.0"
+description = ""
+authors = ["Andrew Brookins <a@andrewbrookins.com>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "3.8"
+redis = "3.5.3"
+rejson = "0.5.3"
+marshmallow-dataclass = "^8.4.1"
+marshmallow-enum = "^1.5.1"
+typeguard = "^2.12.0"
+
+[tool.poetry.dev-dependencies]
+pylint = "^2.8.2"
+yapf = "^0.31.0"
+pytest = "^6.2.4"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
