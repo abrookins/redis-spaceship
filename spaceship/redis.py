@@ -131,7 +131,7 @@ class HashDeck(Deck):
         self.redis.hset(item_key, mapping=object_dict)
         self.redis.incrby(deck_mass_key, obj.mass)
 
-    def store_optimized(self, obj: Union[ShipObject, ShipObjectContainer]):
+    def store(self, obj: Union[ShipObject, ShipObjectContainer]):
         deck_items_key = keys.deck_items_set(self.name)
 
         def _store(p: Pipeline):
@@ -337,8 +337,3 @@ class RedisShip(Ship):
     @property
     def base_weight_kg(self):
         return float(self.redis.get(keys.ship_current_mass()))
-
-    @property
-    def mass(self):
-        return self.base_mass + sum(deck.stored_mass for deck in
-                                       self.decks.values())

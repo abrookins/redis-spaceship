@@ -35,13 +35,14 @@ class DictDeck(Deck):
         self.data = data['decks'][name] = {'objects': {}}
         self.storage = self.data['objects']
 
+    @property
     def stored_mass(self):
         return sum([obj.mass for obj in self.data['objects'].values()])
 
     @property
     def capacity_mass(self) -> float:
         """The current capacity of this deck."""
-        return self.max_storage_kg - self.stored_mass()
+        return self.max_storage_kg - self.stored_mass
 
     def store(self, object: ShipObject):
         """Store an object in this deck."""

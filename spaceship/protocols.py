@@ -75,7 +75,7 @@ class Ship(Protocol):
     @property
     def mass(self) -> float:
         """The total current mass of the ship, including decks."""
-        return self.base_mass + sum(deck.stored_mass() for deck in self.decks.values())
+        return self.base_mass + sum(deck.stored_mass for deck in self.decks.values())
 
     @property
     def weight_kg(self) -> float:
