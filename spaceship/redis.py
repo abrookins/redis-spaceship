@@ -128,7 +128,7 @@ class HashDeck(Deck):
         self.redis.zadd(deck_items_key, {obj.name: obj.mass})
         self.redis.hset(item_key, mapping=object_dict)
         self.redis.incrby(deck_mass_key, obj.mass)
-    # tag::store-non-optimized[]
+    # end::store-non-optimized[]
 
     def store(self, obj: Union[ShipObject, ShipObjectContainer]):
         deck_items_key = keys.deck_items_set(self.name)
