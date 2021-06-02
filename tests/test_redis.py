@@ -94,6 +94,16 @@ def test_hash_deck_over_capacity(redis):
         deck.store(loader)
 
 
+def test_json_deck_store_basic(redis_ship: RedisShip):
+    bob = Person(name="Bob", mass=86)
+
+    assert redis_ship.weight_kg == TWO_MILLION_KG * EARTH_GRAVITY
+    redis_ship.decks['quarters'].store_non_container(bob)
+    assert redis_ship.weight_kg == (TWO_MILLION_KG + 86) * EARTH_GRAVITY
+
+    assert redis_ship.decks['quarters'].get("Bob") == bob
+
+
 def test_json_deck_store(redis_ship: RedisShip):
     bob = Person(name="Bob", mass=86)
 

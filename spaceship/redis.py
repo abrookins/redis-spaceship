@@ -82,8 +82,8 @@ class HashDeck(Deck):
         self.redis.incrby(deck_mass_key, obj.mass)             # <5>
     # end::store-basic[]
 
-    # tag::store-non-optimized[]
-    def store_non_optimized(self, obj: Union[ShipObject, ShipObjectContainer]):
+    # tag::store-non-atomic[]
+    def store_non_atomic(self, obj: Union[ShipObject, ShipObjectContainer]):
         """Store ShipObject or ShipObjectContainer in this deck.  <1>
 
         This method improves on store_non_container() to store either
@@ -128,7 +128,7 @@ class HashDeck(Deck):
         self.redis.zadd(deck_items_key, {obj.name: obj.mass})
         self.redis.hset(item_key, mapping=object_dict)
         self.redis.incrby(deck_mass_key, obj.mass)
-    # end::store-non-optimized[]
+    # end::store-non-atomic[]
 
     def store(self, obj: Union[ShipObject, ShipObjectContainer]):
         deck_items_key = keys.deck_items_set(self.name)
@@ -213,13 +213,13 @@ class JsonDeck(Deck):
         self.max_storage_kg = max_storage_kg
         self.redis = redis
 
-        deck_items_key = keys.deck_items_json(self.name)
-        if not self.redis.exists(deck_items_key):
-            self.redis.jsonset(deck_items_key, '.', {"mass": 0, "objects": {}})
+        deck_key = keys.deck_json(self.name)
+        if not self.redis.exists(deck_key):
+            self.redis.jsonset(deck_key, '.', {"mass": 0, "objects": {}})
 
     def items(self) -> List[ShipObject]:
         items = []
-        objects = self.redis.jsonget(keys.deck_items_json())
+        objects = self.redis.jsonget(keys.deck_json(), ".objects")
         for obj in objects.values():
             schema = object_schemas_by_type.get(obj['type'])
             if not schema:
@@ -229,8 +229,26 @@ class JsonDeck(Deck):
 
         return items
 
-    def store(self, obj: Union[ShipObject, ShipObjectContainer]):
-        deck_items_key = keys.deck_items_json(self.name)
+    # tag::json-store-basic[]
+    def store_non_container(self, obj: Union[ShipObject, ShipObjectContainer]):
+        deck_key = keys.deck_json(self.name)
+        schema = object_schemas_by_type.get(obj.type)
+
+        # The mass of a vehicle includes any objects it carries, so
+        # we don't need to check the mass of individual objects in
+        # a container.
+        if obj.mass > self.capacity_mass:
+            raise NoCapacityError
+
+        object_dict = schema.dump(obj)
+
+        self.redis.jsonset(deck_key, f'.objects.{obj.name}', object_dict)  # <1>
+        self.redis.jsonnumincrby(deck_key, '.mass', obj.mass)              # <2>
+    # end::json-store-basic[]
+
+    # tag::json-store-basic[]
+    def store_non_atomic(self, obj: Union[ShipObject, ShipObjectContainer]):
+        deck_key = keys.deck_json(self.name)
         schema = object_schemas_by_type.get(obj.type)
         objects = None
 
@@ -254,14 +272,45 @@ class JsonDeck(Deck):
                     item_schema = object_schemas_by_type[contained_obj.type]
                     object_dict['objects'][contained_obj.name] = item_schema.dump(contained_obj)
 
-            p.jsonset(deck_items_key, f'.objects.{obj.name}', object_dict)
-            p.jsonnumincrby(deck_items_key, '.mass', obj.mass)
+            p.jsonset(deck_key, f'.objects.{obj.name}', object_dict)
+            p.jsonnumincrby(deck_key, '.mass', obj.mass)
 
-        self.redis.transaction(_store, deck_items_key)
+        self.redis.transaction(_store, deck_key)
+    # tag::json-store-basic[]
+
+    def store(self, obj: Union[ShipObject, ShipObjectContainer]):
+        deck_key = keys.deck_json(self.name)
+        schema = object_schemas_by_type.get(obj.type)
+        objects = None
+
+        if hasattr(obj, 'objects'):
+            # This is a container, so we need to be persist its objects.
+            objects = obj.objects
+
+        def _store(p: Pipeline):
+            # The mass of a vehicle includes any objects it carries, so
+            # we don't need to check the mass of individual objects in
+            # a container.
+            if obj.mass > self.capacity_mass:
+                raise NoCapacityError
+            p.multi()
+
+            object_dict = schema.dump(obj)
+
+            if objects:
+                object_dict['objects'] = {}
+                for contained_obj in objects.values():
+                    item_schema = object_schemas_by_type[contained_obj.type]
+                    object_dict['objects'][contained_obj.name] = item_schema.dump(contained_obj)
+
+            p.jsonset(deck_key, f'.objects.{obj.name}', object_dict)
+            p.jsonnumincrby(deck_key, '.mass', obj.mass)
+
+        self.redis.transaction(_store, deck_key)
 
     @property
     def stored_mass(self):
-        key = keys.deck_items_json(self.name)
+        key = keys.deck_json(self.name)
         stored_mass = self.redis.jsonget(key, '.mass')
         return float(stored_mass) if stored_mass else 0
 
@@ -271,7 +320,7 @@ class JsonDeck(Deck):
         return self.max_storage_kg - self.stored_mass
 
     def get(self, name) -> ShipObject:
-        deck_key = keys.deck_items_json(self.name)
+        deck_key = keys.deck_json(self.name)
         json = self.redis.jsonget(deck_key, f'.objects.{name}')
         obj = load_object(json)
 
@@ -283,6 +332,7 @@ class JsonDeck(Deck):
             obj.objects[name] = contained_obj
 
         return obj
+
 
 
 class PipelineThruster(PropulsionSystem):

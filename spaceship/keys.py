@@ -30,8 +30,8 @@ def deck_items_set(deck_name:str):
     return f"{PREFIX}:deck:{deck_name}:items"
 
 
-def deck_items_json(deck_name:str):
-    return f"{PREFIX}:deck:{deck_name}:items_json"
+def deck_json(deck_name:str):
+    return f"{PREFIX}:deck:{deck_name}"
 
 
 def deck_item(deck_name: str, item_name: str):
