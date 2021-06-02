@@ -1,5 +1,5 @@
 import time
-from typing import List, Protocol
+from typing import Dict, List, Protocol
 
 from .models import Event, Velocity
 
@@ -31,7 +31,7 @@ class ShipObject(Protocol):
 
 class ShipObjectContainer(ShipObject):
     """A ship object that can contain other ShipObjects."""
-    objects: List[ShipObject]
+    objects: Dict[str, ShipObject]
 
 
 class Deck(Protocol):
