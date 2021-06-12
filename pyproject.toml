@@ -6,7 +6,7 @@ authors = ["Andrew Brookins <a@andrewbrookins.com>"]
 license = "MIT"
 
 [tool.poetry.dependencies]
-python = "3.8"
+python = "^3.8"
 redis = "3.5.3"
 rejson = "0.5.3"
 marshmallow-dataclass = "^8.4.1"

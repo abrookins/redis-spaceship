@@ -42,7 +42,7 @@ class Deck(Protocol):
     def items(self) -> List[ShipObject]:
         """Get the items stored in this deck."""
 
-    def store(self, object: ShipObject):
+    def store(self, object: Union[ShipObject, ShipObjectContainer]):
         """Store an object in this deck."""
 
     def get(self, name: str) -> ShipObject:
