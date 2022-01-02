@@ -26,11 +26,11 @@ def deck_stored_mass(deck_name: str):
     return f"{PREFIX}:deck:{deck_name}:stored_mass"
 
 
-def deck_items_set(deck_name:str):
+def deck_items_set(deck_name: str):
     return f"{PREFIX}:deck:{deck_name}:items"
 
 
-def deck_json(deck_name:str):
+def deck_json(deck_name: str):
     return f"{PREFIX}:deck:{deck_name}"
 
 
@@ -42,6 +42,6 @@ def container_item(container_name: str, item_name: str):
     return f"{PREFIX}:{container_name}:{item_name}"
 
 
-def container_items_set(container_name:str):
+def container_items_set(container_name: str):
     return f"{PREFIX}:container:{container_name}:items"
 

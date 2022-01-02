@@ -1,5 +1,6 @@
 import time
-from typing import Dict, List, Protocol
+from abc import abstractmethod
+from typing import Dict, List, Protocol, Union
 
 from .models import Event, Velocity
 
@@ -19,14 +20,26 @@ class PropulsionSystem(Protocol):
 
 
 class ShipObject(Protocol):
-    """An object inside the ship, which has mass."""
+    """An object inside the ship, which has a name, mass, and ID."""
     @property
+    @abstractmethod
     def mass(self) -> float:
         """The object's mass in kilograms."""
 
     @property
+    @abstractmethod
     def name(self) -> str:
         """The object's name."""
+
+    @property
+    @abstractmethod
+    def type(self) -> str:
+        """The object's type."""
+
+    @property
+    @abstractmethod
+    def id(self) -> str:
+        """The object's ID."""
 
 
 class ShipObjectContainer(ShipObject):

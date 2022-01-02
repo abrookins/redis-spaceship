@@ -41,7 +41,7 @@ class HashDeck(Deck):
         self.redis = redis
 
     def items(self) -> List[ShipObject]:
-        object_ids = self.redis.smembers(keys.deck_items_set())
+        object_ids = self.redis.smembers(keys.deck_items_set(self.name))
         items = []
 
         with self.redis.pipeline(transaction=False) as p:
@@ -66,7 +66,7 @@ class HashDeck(Deck):
         NOTE: This is a simple version of the store() method that does
         not make any atomicity guarantees or support objects that
         might contain other objects. See store_non_optimized() for a
-        version that supports container objetts and store() for a
+        version that supports container objects and store() for a
         version that uses the redis.transaction() helper to make this
         update atomic.
         """
@@ -74,13 +74,13 @@ class HashDeck(Deck):
             raise NoCapacityError
 
         deck_items_key = keys.deck_items_set(self.name)
-        item_key = keys.deck_item(self.name, obj.name)
+        item_key = keys.deck_item(self.name, obj.id)
         deck_mass_key = keys.deck_stored_mass(self.name)
         schema = object_schemas_by_type.get(obj.type)          # <1>
 
         object_dict = schema.dump(obj)                         # <2>
 
-        self.redis.zadd(deck_items_key, {obj.name: obj.mass})  # <3>
+        self.redis.zadd(deck_items_key, {obj.id: obj.mass})    # <3>
         self.redis.hset(item_key, mapping=object_dict)         # <4>
         self.redis.incrby(deck_mass_key, obj.mass)             # <5>
     # end::store-basic[]
@@ -93,7 +93,7 @@ class HashDeck(Deck):
         non-container objects or "container" objects, which are
         objects that can contain other objects.
 
-        NOTE: This version of the store() method that does not make
+        NOTE: This version of the store() method does not make
         any atomicity guarantees. See store() for a version that uses
         the redis.transaction() helper to make this update atomic.
         """
@@ -105,7 +105,7 @@ class HashDeck(Deck):
             raise NoCapacityError
 
         deck_items_key = keys.deck_items_set(self.name)
-        item_key = keys.deck_item(self.name, obj.name)
+        item_key = keys.deck_item(self.name, obj.id)
         deck_mass_key = keys.deck_stored_mass(self.name)
         schema = object_schemas_by_type.get(obj.type)
         objects = {}
@@ -125,15 +125,15 @@ class HashDeck(Deck):
         # link them to the container using a sorted set.
         for contained_obj in objects.values():  # <3>
             item_schema = object_schemas_by_type[contained_obj.type]
-            container_key = keys.container_items_set(obj.name)
+            container_key = keys.container_items_set(obj.id)
             container_item_key = keys.container_item(
-                obj.name, contained_obj.name)
+                obj.id, contained_obj.id)
             self.redis.zadd(container_key, {
-                contained_obj.name: contained_obj.mass})
+                contained_obj.id: contained_obj.mass})
             self.redis.hset(container_item_key,
                             mapping=item_schema.dump(contained_obj))
 
-        self.redis.zadd(deck_items_key, {obj.name: obj.mass})
+        self.redis.zadd(deck_items_key, {obj.id: obj.mass})
         self.redis.hset(item_key, mapping=object_dict)
         self.redis.incrby(deck_mass_key, obj.mass)
     # end::store-non-atomic[]
@@ -148,7 +148,7 @@ class HashDeck(Deck):
             if obj.mass > self.capacity_mass:
                 raise NoCapacityError
 
-            item_key = keys.deck_item(self.name, obj.name)
+            item_key = keys.deck_item(self.name, obj.id)
             deck_mass_key = keys.deck_stored_mass(self.name)
             schema = object_schemas_by_type.get(obj.type)
             objects = {}
@@ -168,12 +168,12 @@ class HashDeck(Deck):
             # link them to the container using a sorted set.
             for contained_obj in objects.values():
                 item_schema = object_schemas_by_type[contained_obj.type]
-                container_key = keys.container_items_set(obj.name)
-                container_item_key = keys.container_item(obj.name, contained_obj.name)
-                p.zadd(container_key, {contained_obj.name: contained_obj.mass})
+                container_key = keys.container_items_set(obj.id)
+                container_item_key = keys.container_item(obj.id, contained_obj.id)
+                p.zadd(container_key, {contained_obj.id: contained_obj.mass})
                 p.hset(container_item_key, mapping=item_schema.dump(contained_obj))
 
-            p.zadd(deck_items_key, {obj.name: obj.mass})
+            p.zadd(deck_items_key, {obj.id: obj.mass})
             p.hset(item_key, mapping=object_dict)
             p.incrby(deck_mass_key, obj.mass)
 
@@ -199,17 +199,17 @@ class HashDeck(Deck):
 
         # If this is a container type, we need to find all of its
         # objects and load them.
-        container_key = keys.container_items_set(obj.name)
+        container_key = keys.container_items_set(obj.id)
         container_object_names = self.redis.zrange(container_key, 0, -1)
         with self.redis.pipeline(transaction=False) as p:
             for _name in container_object_names:
-                container_item_key = keys.container_item(obj.name, _name)
+                container_item_key = keys.container_item(obj.id, _name)
                 p.hgetall(container_item_key)
             hashes = p.execute()
 
         for _hash in hashes:
             container_obj = load_object(_hash)
-            obj.objects[container_obj.name] = container_obj
+            obj.objects[container_obj.id] = container_obj
 
         return obj
 
@@ -227,7 +227,7 @@ class JsonDeck(Deck):
 
     def items(self) -> List[ShipObject]:
         items = []
-        objects = self.redis.jsonget(keys.deck_json(), ".objects")
+        objects = self.redis.jsonget(keys.deck_json(self.name), ".objects")
         for obj in objects.values():
             schema = object_schemas_by_type.get(obj['type'])
             if not schema:
@@ -250,7 +250,7 @@ class JsonDeck(Deck):
 
         object_dict = schema.dump(obj)
 
-        self.redis.jsonset(deck_key, f'.objects.{obj.name}', # <1>
+        self.redis.jsonset(deck_key, f'.objects.{obj.id}', # <1>
                            object_dict)
         self.redis.jsonnumincrby(deck_key, '.mass',          # <2>
                                  obj.mass)
@@ -277,7 +277,7 @@ class JsonDeck(Deck):
                 object_dict['objects'][name] = \
                     item_schema.dump(contained_obj)  # <3>
 
-        self.redis.jsonset(deck_key, f'.objects.{obj.name}',  # <4>
+        self.redis.jsonset(deck_key, f'.objects.{obj.id}',  # <4>
                            object_dict)
         self.redis.jsonnumincrby(deck_key, '.mass', obj.mass)
     # end::json-store-containers-non-atomic[]
@@ -304,7 +304,7 @@ class JsonDeck(Deck):
                     object_dict['objects'][name] = item_schema.dump(
                         contained_obj)
 
-            p.jsonset(deck_key, f'.objects.{obj.name}', object_dict)
+            p.jsonset(deck_key, f'.objects.{obj.id}', object_dict)
             p.jsonnumincrby(deck_key, '.mass', obj.mass)
 
         self.redis.transaction(_store, deck_key)
@@ -328,12 +328,11 @@ class JsonDeck(Deck):
         if obj.type != 'vehicle':
             return obj
 
-        for obj_name, contained_object_data in json['objects'].items():
+        for obj_id, contained_object_data in json['objects'].items():
             contained_obj = load_object(contained_object_data)
-            obj.objects[obj_name] = contained_obj
+            obj.objects[obj_id] = contained_obj
 
         return obj
-
 
 
 class PipelineThruster(PropulsionSystem):
@@ -371,7 +370,7 @@ class RedisShip(Ship):
                  decks: List[Deck], low_fuel_threshold: float = 0) -> None:
         self.base_mass = base_mass
         self.thruster = thruster
-        self.decks = {deck.name: deck for deck in decks}
+        self.decks = {deck.name: deck for deck in decks}  # TODO: Why is this a dict and not a list?
         self.event_log = event_log
         self.redis = redis
         self.redis['current_velocity'] = velocity_schema.dumps(Velocity(0, Direction.N))
